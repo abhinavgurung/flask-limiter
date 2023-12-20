@@ -1,110 +1,43 @@
-
-from flask import Flask, jsonify, make_response
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from functools import wraps
-from werkzeug.exceptions import TooManyRequests
-import logging
-import traceback
-from flask import request
+from flask import Flask, jsonify
+from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient
 
 app = Flask(__name__)
+# token_credential = DefaultAzureCredential()
+
+# Your Azurite local connection string
+connection_string = "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
+
+@app.route('/create_container')
+def create_container():
+    container_name = "cdcontainer1"
+
+    try:
+        # Create a BlobServiceClient using the connection string
+        blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+
+        # Create a new container
+        container_client = blob_service_client.get_container_client(container_name)
+        container_client.create_container()
+        print(f"Container '{container_name}' created successfully.")
+
+        # Fetch the list of containers
+        containers = blob_service_client.list_containers()
+
+        # Extract container names and create a list
+        container_names = [container.name for container in containers]
+        print('---- container names-----')
+        print(container_names)
 
 
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    default_limits=["4 per day", "4 per hour"],
-    storage_uri="memory://",
-)
+        return f"Container '{container_name}' created successfully."
 
-def handle_too_many_requests_error(error):
-    """Handle 429 error which rise due to too many requests"""
-    logging.error(
-        "Too many requests logging ----------------- ")
-    # logging.error(traceback.format_exc())
-    print('printing request endpoint')
-    print(request.endpoint)
-    print('request endpoint printed')
-
-    if not is_authenticated():
-        return {"message:": "UnAuthorized"}, 401
-
-    return {"message:": "custom too many requests"}, 429
+    except Exception as e:
+        print('caught exception')
+        print(str(e))
+        return f"Error: {str(e)}"
 
 
-app.register_error_handler(TooManyRequests, handle_too_many_requests_error)
-
-# # Custom decorator for authentication
-# def authenticated_request(f):
-#     @wraps(f)
-#     def decorated_function(*args, **kwargs):
-#         if not is_authenticated():
-#             print('not authenticated returning 401')
-#             return jsonify({"message": "Unauthorized"}), 401
-
-        
-#         # check rate limit after authentication
-#         else:
-#             print('checking limiter check')
-#             resp = limiter.check()
-#             if resp and resp[1]:
-#                 print('returning 429...')
-#                 return jsonify({"message": "Rate limit exceeded"}), 429
-
-#         return f(*args, **kwargs)
-#     return decorated_function
-
-# def authenticated_request(f):
-#     @wraps(f)
-#     def decorated_function(*args, **kwargs):
-#         if not is_authenticated():
-#             print('not authenticated returning 401')
-#             return jsonify({"message": "Unauthorized"}), 401
-        
-#         # Proceed if authenticated
-#         result = f(*args, **kwargs)
-        
-#         # Check rate limit after executing the endpoint function
-#         print('checking limiter check')
-#         resp = limiter.check()
-#         print(resp)
-#         print(resp[1])
-#         if resp and resp[1]:
-#             print('returning 429...')
-#             return jsonify({"message": "Rate limit exceeded"}), 429
-        
-#         return result
-
-#     return decorated_function
-
-def authenticated_request(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not is_authenticated():
-            return jsonify({"message": "Unauthorized"}), 401
-        
-        # Execute the endpoint function
-        result = f(*args, **kwargs)
-        
-        # Check rate limit after executing the endpoint function
-        resp = limiter.check()
-        if resp and resp[1]:
-            return jsonify({"message": "Rate limit exceeded"}), 429
-        
-        return result
-
-    return decorated_function
-
-
-def is_authenticated():
-    return True
-
-@app.route('/example')
-@authenticated_request
-def example_route():
-    return jsonify({"message": "This is an example route"})
-
-@app.route('/test')
+@app.route('/test-route')
 def test_route():
-    return jsonify({"message": "This is an test"})
+    return jsonify({'message':'This is a test route'})
